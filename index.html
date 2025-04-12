@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rock Paper Scissors - NFT Battle (Sim)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+    <style>
+        /* Basic styling */
+        body {
+            font-family: 'Inter', sans-serif; background-color: #1a202c; color: #e2e8f0; display: flex; justify-content: center; align-items: flex-start; /* Align top for scroll */ min-height: 100vh; padding: 1rem; }
+        #game-container { width: 100%; max-width: 48rem; margin-top: 1rem; margin-bottom: 1rem; }
+        /* Card styles */
+            .card { width: 100%;
+                    aspect-ratio: 100 / 140; /* <--- ADD Maintain aspect ratio (approx 5:7) */
+                    border: 2px solid #4a5568; 
+                    border-radius: 0.5rem; 
+                    display: flex; 
+                    flex-direction: column; 
+                    justify-content: center; 
+                    align-items: center; 
+                    /*font-size: 3rem;*/
+                    font-size: 11vw; /* <--- ADD responsive font size based on viewport width */
+                    min-width: 65px; /* <--- ADD: Prevent card getting too narrow */
+
+                    line-height: 1; /* <--- ADD Ensure line height doesn't add extra space */
+
+                    background-color: #2d3748;
+                    /* margin: 0.5rem; */ /* <--- REMOVE default margin if using mx-auto */
+                    margin-left: auto; /* Ensure centering if container is wider */
+                    margin-right: auto; /* Ensure centering */
+                    transition: transform 0.3s ease, box-shadow 0.3s ease, opacity 0.4s ease, filter 0.4s ease, border-color 0.3s ease; 
+                    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3); 
+                    position: relative; 
+                    overflow: hidden; 
+                }
+
+            @media (min-width: 640px) { /* sm breakpoint or adjust as needed */
+                .card {
+                    font-size: 3rem; /* Revert to a larger fixed size or use clamp() */
+                    min-width: 80px; /* Optional: min-width for larger screens */
+
+                }
+            }
+
+        .card.winner { border-color: #38a169; box-shadow: 0 0 15px rgba(56, 161, 105, 0.7); transform: scale(1.05); }
+        .card.loser { border-color: #718096; opacity: 0.6; filter: grayscale(80%); }
+        .card.draw { border-color: #f59e0b; transform: scale(1.02); }
+        .inventory-card { width: 70px; height: 100px; font-size: 2rem; margin: 0.3rem; border-width: 1px; }
+        .round-indicator { width: 20px; height: 20px; border: 2px solid #4a5568; border-radius: 50%; display: inline-block; margin: 0 5px; background-color: transparent; transition: background-color 0.3s ease; }
+        .round-indicator.won { background-color: #38a169; border-color: #38a169; }
+        .win-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.85); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 100; opacity: 0; visibility: hidden; transition: opacity 0.5s ease, visibility 0s linear 0.5s; }
+        .win-screen.show { opacity: 1; visibility: visible; transition: opacity 0.5s ease; }
+        @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+        .pulse-button { animation: pulse 2s infinite; }
+        .hidden { display: none; }
+
+        /* Modal Styles */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.7); display: flex; justify-content: center; align-items: center; z-index: 50; opacity: 0; visibility: hidden; transition: opacity 0.3s ease, visibility 0s linear 0.3s; padding: 1rem; /* Add padding for smaller screens */ }
+        .modal-overlay.show { opacity: 1; visibility: visible; transition: opacity 0.3s ease; }
+        .modal-content { background-color: #2d3748; padding: 1.5rem; border-radius: 0.5rem; border: 1px solid #4a5568; width: 100%; /* Full width on small screens */ max-width: 400px; /* Max width */ box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5); transform: scale(0.95); transition: transform 0.3s ease; }
+        .modal-overlay.show .modal-content { transform: scale(1); }
+        .modal-content label { margin-right: 0.5rem; font-weight: 500; }
+        .modal-content select, .modal-content input[type="number"] { background-color: #4a5568; border: 1px solid #718096; color: #e2e8f0; padding: 0.3rem 0.5rem; border-radius: 0.25rem; margin-right: 0.5rem; }
+        .modal-content input[type=number]::-webkit-inner-spin-button, .modal-content input[type=number]::-webkit-outer-spin-button { opacity: 1; background-color: #718096; border-radius: 2px; }
+        .modal-content button { padding: 0.4rem 0.8rem; border-radius: 0.3rem; font-weight: 600; transition: background-color 0.2s ease; margin-left: 0.5rem; }
+        .btn-confirm { background-color: #38a169; color: #fff; } .btn-confirm:hover { background-color: #2f855a; } .btn-confirm:disabled { background-color: #4a5568; cursor: not-allowed; }
+        .btn-cancel { background-color: #e53e3e; color: #fff; } .btn-cancel:hover { background-color: #c53030; }
+        .btn-action-toggle { background-color: #4a5568; color: #e2e8f0; margin: 0 0.5rem; } .btn-action-toggle:hover { background-color: #718096; }
+        .modal-feedback { text-align: center; margin-top: 0.5rem; height: 1.25rem; font-weight: 500; }
+        .feedback-success { color: #48bb78; } .feedback-error { color: #f56565; }
+
+        /* Deck Selection Modal Styles */
+        .deck-input-group { display: flex; align-items: center; margin-bottom: 0.75rem; justify-content: space-between; }
+        .deck-input-group label { flex-basis: 100px; text-align: right; margin-right: 0.5rem; }
+        .deck-input-controls { display: flex; align-items: center; }
+        .deck-input-btn { background-color: #4a5568; color: white; border: none; width: 30px; height: 30px; border-radius: 50%; font-size: 1.2rem; line-height: 1; cursor: pointer; transition: background-color 0.2s; }
+        .deck-input-btn:hover { background-color: #718096; }
+        .deck-input-btn:disabled { background-color: #2d3748; cursor: not-allowed; opacity: 0.5; }
+        .deck-count-display { font-size: 1.1rem; font-weight: bold; margin: 0 0.75rem; min-width: 25px; text-align: center; }
+        .deck-input-group .inventory-count { font-size: 0.8rem; color: #a0aec0; margin-left: 0.5rem; }
+        #deck-total-display { font-weight: bold; margin-top: 1rem; text-align: center; height: 1.5rem; }
+        #deck-total-display.invalid { color: #f56565; }
+        #deck-total-display.valid { color: #48bb78; }
+
+        /* Battle Start Popup */
+        #battle-start-popup { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%) scale(0.8); background-color: rgba(20, 30, 48, 0.9); color: #ff9800; padding: 2rem 3rem; border-radius: 1rem; font-size: 2.5rem; font-weight: bold; text-align: center; z-index: 110; border: 3px solid #ff9800; opacity: 0; visibility: hidden; transition: opacity 0.3s ease, transform 0.3s ease, visibility 0s linear 0.3s; box-shadow: 0 0 15px 5px rgba(255, 152, 0, 0.5); }
+        #battle-start-popup.show { opacity: 1; visibility: visible; animation: battle-start-anim 0.5s ease-out forwards, fire-effect 1.5s infinite alternate; }
+        @keyframes battle-start-anim { 0% { transform: translate(-50%, -50%) scale(0.8); opacity: 0; } 50% { transform: translate(-50%, -50%) scale(1.1); opacity: 1; } 100% { transform: translate(-50%, -50%) scale(1); opacity: 1; } }
+        @keyframes fire-effect { 0% { box-shadow: 0 0 15px 5px rgba(255, 152, 0, 0.5), 0 0 5px 2px rgba(255, 87, 34, 0.4); } 100% { box-shadow: 0 0 25px 8px rgba(255, 152, 0, 0.7), 0 0 8px 3px rgba(255, 87, 34, 0.6); } }
+
+        /* Roulette Animation Placeholder */
+        .roulette-item { font-size: 3rem; text-align: center; }
+
+        /* Attack Animation */
+        @keyframes attack-p1 { 0% { transform: translateX(0) rotate(0); } 50% { transform: translateX(40px) rotate(15deg) scale(1.1); } 100% { transform: translateX(0) rotate(0); } } /* Reduced distance */
+        @keyframes attack-p2 { 0% { transform: translateX(0) rotate(0); } 50% { transform: translateX(-40px) rotate(-15deg) scale(1.1); } 100% { transform: translateX(0) rotate(0); } } /* Reduced distance */
+
+        .attacking-p1 { animation: attack-p1 0.6s ease-in-out; }
+        .attacking-p2 { animation: attack-p2 0.6s ease-in-out; }
+
+        /* ENJ Coin Style */
+        .enj-coin { display: inline-flex; justify-content: center; align-items: center; width: 1.1rem; height: 1.1rem; border-radius: 50%; background-color: #805ad5; color: white; font-size: 0.75rem; font-weight: bold; line-height: 1; text-align: center; vertical-align: middle; margin: 0 0.1rem; box-shadow: 0 1px 2px rgba(0,0,0,0.3); }
+        .enj-inline { display: inline-flex; align-items: center; }
+
+        /* Ante Feedback Style */
+        #ante-feedback { color: #f56565; font-size: 0.875rem; height: 1.25rem; margin-top: 0.5rem; }
+
+        /* Betting Controls Styles */
+        #betting-info { margin-bottom: 1rem; font-weight: 500; }
+        #pot-display { font-weight: bold; color: #a3bffa; }
+        #player1-action-display { font-style: italic; color: #bee3f8; height: 1.25rem; margin-top: 0.5rem; }
+        #player2-action-display { font-style: italic; color: #90cdf4; height: 1.25rem; margin-top: 0.5rem; }
+        #betting-controls { display: flex; flex-direction: column; align-items: center; gap: 0.5rem; /* Stack buttons vertically with gap */ }
+        @media (min-width: 640px) { /* sm breakpoint */
+            #betting-controls {
+                display: flex;
+                /* flex-direction: column; */ /* Already default? Explicitly set */
+                align-items: center;
+                gap: 0.5rem; /* Add gap between stacked buttons */
+                /* Remove row layout for md screens if always stacked */
+                /* @media (min-width: 640px) { flex-direction: row; justify-content: center; gap: 0; } */
+            }
+        #betting-controls button {
+             width: 80%; /* Keep buttons wide on mobile */
+             max-width: 250px; /* Adjust max width if needed */
+            /* Remove auto width for md screens if always stacked */
+            /* @media (min-width: 640px) { width: auto; max-width: none; } */
+        }
+        @media (min-width: 640px) {
+             #betting-controls button { width: auto; max-width: none; } /* Auto width on larger screens */
+        }
+        #betting-controls button:disabled { background-color: #4a5568; cursor: not-allowed; opacity: 0.7; }
+        .btn-call { background-color: #3182ce; color: white; } .btn-call:hover:not(:disabled) { background-color: #2b6cb0; }
+        .btn-raise { background-color: #dd6b20; color: white; } .btn-raise:hover:not(:disabled) { background-color: #c05621; }
+        .btn-forfeit { background-color: #718096; color: white; } .btn-forfeit:hover:not(:disabled) { background-color: #4a5568; }
+
+        /* Big Pot Display Styles */
+        #main-pot-display { border: 2px solid #4a5568; background-color: rgba(45, 55, 72, 0.5); border-radius: 0.5rem; padding: 0.5rem 1rem; margin-bottom: 1.5rem; }
+        #main-pot-display .pot-label { font-size: 0.875rem; color: #a0aec0; text-transform: uppercase; letter-spacing: 0.05em; }
+         #main-pot-display .pot-amount { font-size: 2.25rem; font-weight: bold; color: #fbd38d; line-height: 1.1; }
+          #main-pot-display .enj-coin { width: 1.5rem; height: 1.5rem; font-size: 1rem; margin-left: 0.25rem; }
+
+        /* Timer Style */
+        #betting-timer-display { margin-top: 0.75rem; font-size: 1.1rem; }
+        #betting-timer.timer-warning { color: #f56565; font-weight: bold; } /* Red warning */
+
+        /* Auto-Play Indicator Style */
+         #auto-play-indicator { position: absolute; top: 5px; right: 10px; background-color: rgba(30, 41, 59, 0.8); color: #60a5fa; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 500; border: 1px solid #60a5fa; z-index: 10; }
+          #auto-play-indicator span { animation: pulse 1.5s infinite ease-in-out; }
+
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-200">
+
+    <div id="game-container" class="w-full max-w-4xl mx-auto p-4 md:p-6 bg-gray-800 rounded-lg shadow-xl text-center relative">
+        <h1 class="text-3xl font-bold mb-4 text-teal-400">Rock Paper Scissors - NFT Battle (Simulated)</h1>
+        <p class="text-sm text-gray-400 mb-6">This is a simulation with a mock economy. No real assets are used.</p>
+
+        <div id="my-cards-screen">
+             <h2 class="text-2xl font-semibold mb-4 text-teal-300">My Profile & Cards</h2>
+             <div id="player-profile" class="mb-6 p-4 bg-gray-700 rounded-lg shadow">
+                 <h3 class="text-lg font-medium mb-2">Session Stats (Player 1)</h3>
+                 <div class="flex flex-col items-center space-y-1 sm:flex-row sm:justify-around sm:space-y-0">
+                     <p class="mx-2">Matches Won: <span id="total-wins" class="font-bold text-green-400">0</span></p>
+                     <p class="mx-2">Matches Lost: <span id="total-losses" class="font-bold text-red-400">0</span></p>
+                     <p class="mx-2">Balance: <span id="enj-balance" class="font-bold text-purple-400">0</span><span class="enj-coin">E</span> ENJ</p>
+                 </div>
+             </div>
+             <div class="mb-4">
+                 <h3 class="text-lg font-medium mb-3">My Current Inventory</h3>
+                 <div id="my-cards-display" class="flex justify-center items-center flex-wrap gap-4 p-4 bg-gray-700 rounded-lg shadow min-h-[120px]">
+                      <p class="text-gray-400">Initializing inventory...</p> </div>
+             </div>
+             <div class="mb-4">
+                  <button id="buy-button" class="btn-action-toggle">Buy Cards</button>
+                  <button id="sell-button" class="btn-action-toggle">Sell Cards</button>
+             </div>
+             <div id="controls" class="mt-6">
+                  <button id="challenge-button" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-lg text-lg transition duration-200 pulse-button">
+                       Start Battle (Ante: 5<span class="enj-coin !w-3 !h-3 !text-[0.6rem] mx-0.5">E</span>)
+                  </button>
+                  <p id="ante-feedback"></p> </div>
+        </div>
+
+        <div id="game-area" class="hidden relative">
+             <div id="auto-play-indicator" class="hidden"> <span>▶️ Auto Playing...</span> </div>
+             <h2 class="text-2xl font-semibold mb-4 text-yellow-300">Battle Arena</h2>
+
+             <div id="main-pot-display" class="text-center mb-4">
+                 <span class="pot-label">Pot</span>
+                 <div class="pot-amount"> <span id="main-pot-amount">0</span><span class="enj-coin">E</span> </div>
+             </div>
+
+    <div class="flex justify-around items-start mb-4">
+        <div class="text-center w-[45%] max-w-[150px]"> <h3 class="text-lg sm:text-xl font-semibold mb-2">Player 1</h3>
+            <div id="player1-indicators" class="mb-3 h-5"> <span class="round-indicator"></span><span class="round-indicator"></span><span class="round-indicator"></span>
+            </div>
+            <div id="player1-card" class="card mx-auto">?</div> <p class="text-xs sm:text-sm text-gray-400 mt-2">Deck: <span id="player1-deck-count">10</span></p>
+        </div>
+
+        <div class="text-center w-[45%] max-w-[150px]"> <h3 class="text-lg sm:text-xl font-semibold mb-2">Player 2</h3>
+             <div id="player2-indicators" class="mb-3 h-5"> <span class="round-indicator"></span><span class="round-indicator"></span><span class="round-indicator"></span>
+            </div>
+            <div id="player2-card" class="card mx-auto">?</div> <p class="text-xs sm:text-sm text-gray-400 mt-2">Deck: <span id="player2-deck-count">10</span></p>
+        </div>
+    </div>
+
+    <div class="w-full text-center mt-4 pt-2 border-t border-gray-700"> <p id="round-result" class="text-lg font-medium h-8 mb-1"></p> <p id="draw-info" class="text-yellow-400 text-sm h-6 mb-1"></p> <div id="betting-info" class="mb-3 hidden">
+            <p class="text-sm">Current Pot: <span id="pot-display">10</span><span class="enj-coin">E</span></p>
+            <p id="betting-timer-display" class="text-lg font-semibold mt-1 hidden">Time Left: <span id="betting-timer" class="text-xl">10</span>s</p>
+            <p id="player1-action-display"></p>
+            <p id="player2-action-display"></p>
+            <p id="betting-feedback" class="feedback-error h-5 text-sm mt-1"></p>
+        </div>
+        <div id="betting-controls" class="hidden">
+            <button id="call-button" class="btn-call">Call / Next Round</button>
+            <button id="raise-button" class="btn-raise">Raise (5<span class="enj-coin !w-3 !h-3 !text-[0.6rem] mx-0.5">E</span>)</button>
+            <button id="forfeit-button" class="btn-forfeit">Forfeit</button>
+        </div>
+        <button id="next-round-button" class="hidden mt-2 bg-yellow-500 hover:bg-yellow-600 text-gray-900 font-bold py-2 px-4 rounded-lg transition duration-200">Next Round</button>
+    </div>
+
+    </div>
+        </div> </div> <div id="deck-selection-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h4 class="text-lg font-semibold mb-4 text-blue-300 text-center">Choose Your Battle Deck (Total 10 Cards)</h4>
+            <div class="deck-input-group">
+                <label for="deck-r-count">Rock ✊:</label>
+                <div class="deck-input-controls">
+                    <button type="button" class="deck-input-btn deck-adjust-btn" data-type="R" data-action="decrement">-</button>
+                    <span id="deck-r-display" class="deck-count-display">4</span>
+                    <button type="button" class="deck-input-btn deck-adjust-btn" data-type="R" data-action="increment">+</button>
+                </div>
+                <span class="inventory-count">(Inv: <span id="inv-r-count">0</span>)</span>
+            </div>
+            <div class="deck-input-group">
+                <label for="deck-p-count">Paper ✋:</label>
+                 <div class="deck-input-controls">
+                    <button type="button" class="deck-input-btn deck-adjust-btn" data-type="P" data-action="decrement">-</button>
+                    <span id="deck-p-display" class="deck-count-display">3</span>
+                    <button type="button" class="deck-input-btn deck-adjust-btn" data-type="P" data-action="increment">+</button>
+                </div>
+                 <span class="inventory-count">(Inv: <span id="inv-p-count">0</span>)</span>
+            </div>
+            <div class="deck-input-group">
+                <label for="deck-s-count">Scissor ✌️:</label>
+                 <div class="deck-input-controls">
+                    <button type="button" class="deck-input-btn deck-adjust-btn" data-type="S" data-action="decrement">-</button>
+                    <span id="deck-s-display" class="deck-count-display">3</span>
+                    <button type="button" class="deck-input-btn deck-adjust-btn" data-type="S" data-action="increment">+</button>
+                </div>
+                 <span class="inventory-count">(Inv: <span id="inv-s-count">0</span>)</span>
+            </div>
+            <div id="deck-total-display">Total: 10 / 10</div>
+            <p id="deck-feedback" class="modal-feedback feedback-error"></p>
+            <div class="flex justify-end mt-4">
+                <button id="confirm-deck-button" class="btn-confirm">Confirm Deck & Battle!</button>
+                <button id="cancel-deck-button" class="btn-cancel">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="buy-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h4 class="text-lg font-semibold mb-4 text-green-300 text-center">Buy Cards</h4>
+            <div class="text-center text-sm text-gray-400 mb-3">
+                <span>Price: <span id="buy-price" class="font-semibold text-purple-400">--</span><span class="enj-coin">E</span></span> |
+                <span>Available: <span id="buy-available" class="font-semibold text-blue-400">--</span></span>
+            </div>
+            <div class="mb-3">
+                <label for="buy-type-select">Card:</label>
+                <select id="buy-type-select">
+                    <option value="R">Rock ✊</option> <option value="P">Paper ✋</option> <option value="S">Scissor ✌️</option>
+                </select>
+                <span class="text-sm mx-2">(Owned: <span id="buy-current-count">0</span>)</span>
+            </div>
+            <div class="mb-4 flex items-center justify-between"> <label>Quantity:</label> <div class="deck-input-controls"> <button type="button" class="deck-input-btn quantity-adjust-btn" data-modal="buy" data-action="decrement">-</button>
+            <span id="buy-quantity-display" class="deck-count-display">1</span> <button type="button" class="deck-input-btn quantity-adjust-btn" data-modal="buy" data-action="increment">+</button>
+            </div>
+            <span class="text-sm ml-2 w-24 text-right">Cost: <span id="buy-total-cost" class="font-semibold text-purple-400">0</span><span class="enj-coin">E</span></span> </div>
+            <p id="buy-feedback" class="modal-feedback"></p>
+            <div class="flex justify-end mt-4">
+                <button id="confirm-buy-button" class="btn-confirm">Confirm Buy</button>
+                <button id="cancel-buy-button" class="btn-cancel">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+     <div id="sell-modal" class="modal-overlay">
+         <div class="modal-content">
+             <h4 class="text-lg font-semibold mb-4 text-red-300 text-center">Sell Cards</h4>
+             <div class="text-center text-sm text-gray-400 mb-3">
+                 <span>Price: <span id="sell-price" class="font-semibold text-purple-400">--</span><span class="enj-coin">E</span></span> |
+                 <span>Available: <span id="sell-available" class="font-semibold text-blue-400">--</span></span> </div>
+             <div class="mb-3">
+                 <label for="sell-type-select">Card:</label>
+                 <select id="sell-type-select">
+                     <option value="R">Rock ✊</option> <option value="P">Paper ✋</option> <option value="S">Scissor ✌️</option>
+                 </select>
+                 <span class="text-sm mx-2">(Owned: <span id="sell-current-count">0</span>)</span>
+             </div>
+            <div class="mb-4 flex items-center justify-between"> <label>Quantity:</label> <div class="deck-input-controls"> <button type="button" class="deck-input-btn quantity-adjust-btn" data-modal="sell" data-action="decrement">-</button>
+            <span id="sell-quantity-display" class="deck-count-display">1</span> <button type="button" class="deck-input-btn quantity-adjust-btn" data-modal="sell" data-action="increment">+</button>
+            </div>
+                <span class="text-sm ml-2 w-24 text-right">Earn: <span id="sell-total-earn" class="font-semibold text-purple-400">0</span><span class="enj-coin">E</span></span> </div>
+             <p id="sell-feedback" class="modal-feedback"></p>
+             <div class="flex justify-end mt-4">
+                 <button id="confirm-sell-button" class="btn-confirm">Confirm Sell</button>
+                 <button id="cancel-sell-button" class="btn-cancel">Cancel</button>
+             </div>
+         </div>
+     </div>
+
+    <div id="win-screen" class="win-screen">
+        <h2 id="win-message" class="text-5xl font-bold mb-4"></h2> <p id="win-reward" class="text-lg text-purple-300 mb-6"></p> <button id="play-again-button" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg transition duration-200">Back to My Cards</button>
+    </div>
+
+    <div id="battle-start-popup"> Battle Start! </div>
+
+    <script src="config.js"></script>
+    <script src="game.js"></script>
+
+</body>
+</html>
